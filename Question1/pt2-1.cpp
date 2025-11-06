@@ -1,9 +1,3 @@
-
-
-
-
-/////////////////////////////////////////////////////////////CODE FOR 3. //////////////////////////
-
 #include <unistd.h>
 #include <iostream>
 #include <sys/types.h>
@@ -38,14 +32,13 @@ int main(void){
     pid_t pid2;           // <-- declare here so it is visible in parent for waitpid
 
 
-    
+    int cycle_counter = 0;
     if (pid1 <0){
         std::cerr << "Fork failed" << std::endl;
         exit(1);
     }
 
     else if (pid1 == 0) {
-        int cycle_counter1 = 0;
         // Child process
         std::cout << "Child process is running" << std::endl;
         // Child process 1
@@ -54,10 +47,10 @@ int main(void){
                 counter1 = counter1 +1;
 
                 if (counter1 % 3 == 0) {
-                    std::cout << "Cycle number " << cycle_counter1++ << " Process 1 Counter: " << counter1 << " - Multiple of 3!" << std::endl;
+                    std::cout << "Cycle number " << cycle_counter++ << " Process 2 Counter: " << counter1 << " - Multiple of 3!" << std::endl;
                 }
                 else{
-                    std::cout << "Cycle number " << cycle_counter1++ << " Process 1 Counter: " << counter1 << std::endl;
+                    std::cout << "Process 2 Counter: " << counter1 << std::endl;
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(500)); // slow down output
             }
@@ -78,7 +71,14 @@ int main(void){
 
         else if (pid2 == 0) {
             // Child process
-            execl("./process2", "process2", nullptr);
+            std::cout << "Child process is running" << std::endl;
+            // Child process 2
+            int counter1 = 0;
+
+            while (true) {
+                std::cout << "Cycle number " << cycle_counter++ << " Process 2 Counter: " << counter1++ << std::endl;
+                std::this_thread::sleep_for(std::chrono::milliseconds(500)); // slow down output
+            }
             exit(0); // never actually reached
         } 
 
@@ -89,15 +89,9 @@ int main(void){
             //waitpid is a better version of wait() because it allows you to specify which child process to wait for. 
             //we will pass in child pid, address of status variable to store exit status, and options (0 means no options)
 
+            waitpid(pid2, &status, 0); //these will kill the pid of the child processes when they finish 
+            waitpid(pid1, &status, 0);
 
-            //parent will wait for the pid2 (process2) to finish, when it does,
-            //status will be updated with the exit status of process2
-            //we are essentially pausing the parent process here until process2 finishes
-            //and it will then kill the PCB of it and everything. If it ends, we will 
-            //continue by terminating process1 as well.
-            waitpid(pid2, &status, 0);
-            kill(pid1, SIGTERM); //terminate child process 1
-            
         }
 
     }
@@ -105,4 +99,3 @@ int main(void){
     return 0;
 
 }
-

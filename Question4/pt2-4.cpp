@@ -82,7 +82,7 @@ int main(void){
                 else{
                     std::cout << "Cycle number " << cycle_counter1++ << " Process 1 Counter: " << shared_mem[1] << std::endl;
                 }
-                std::this_thread::sleep_for(std::chrono::milliseconds(50)); // slow down output
+                std::this_thread::sleep_for(std::chrono::milliseconds(100)); // slow down output
             }
         exit(0); // never actually reached
     } 
