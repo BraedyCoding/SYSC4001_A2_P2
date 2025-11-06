@@ -1,0 +1,130 @@
+/////////////////////////////////////////////////////Code for #4 ////////////////////////////////////////////////////////
+#include <unistd.h>
+#include <iostream>
+#include <sys/types.h>
+#include <sys/wait.h>   // <-- needed for waitpid
+#include <cstdlib>      // for exit
+#include <chrono>
+#include <thread>       // for std::this_thread::sleep_for
+
+#include <sys/ipc.h>
+#include <sys/shm.h>
+
+
+
+
+//Background:
+// We want to make sure that the child processes are terminated 
+// before the parent process finishes. This is because if a child 
+// terminates **while the parent is still alive** and the parent 
+// does not call waitpid(), the child becomes a zombie process. 
+// The PCB of the child remains in memory so the parent can access 
+// its exit status, which uses up RAM.  
+// If the parent dies before the child finishes, the kernel will 
+// adopt the child and automatically clean up its PCB when it exits, 
+// so no zombie is left.  
+// To properly handle child termination and retrieve their exit status, 
+// we use waitpid(), passing in the child’s PID, the address of a status 
+// variable, and options (0 means no special options).
+
+
+
+
+int main(void){
+
+//In the begginiging of the parent process, we will create the shared memory
+
+    // Shared memory setup
+    key_t key = 1234;  // arbitrary key
+    int shmid = shmget(key, 2 * sizeof(int), 0666 | IPC_CREAT); // two ints: multiple and counter
+    if (shmid < 0) {
+        std::cerr << "Failed to create shared memory" << std::endl;
+        exit(1);
+    }
+
+    int* shared_mem = (int*) shmat(shmid, nullptr, 0);
+    if (shared_mem == (void*) -1) {
+        std::cerr << "Failed to attach shared memory" << std::endl;
+        exit(1);
+    }
+
+    // shared_mem[0] = multiple
+    // shared_mem[1] = counter
+    shared_mem[0] = 3;   // default multiple
+    shared_mem[1] = 0;   // counter starts at 0
+
+
+
+    //create child process1
+
+    pid_t pid1 = fork(); //child will continue from here, will have pid = 0
+                        //parent will continue from here, will have pid = child's pid
+    pid_t pid2;           // <-- declare here so it is visible in parent for waitpid
+
+
+    
+    if (pid1 <0){
+        std::cerr << "Fork failed" << std::endl;
+        exit(1);
+    }
+
+    else if (pid1 == 0) {
+        int cycle_counter1 = 0;
+        // Child process
+        std::cout << "Child process is running" << std::endl;
+        // Child process 1
+
+        while (shared_mem[1] < 500) {
+            shared_mem[1] +=1;
+                if (shared_mem[1] % 3 == 0) {
+                    std::cout << "Cycle number " << cycle_counter1++ << " Process 1 Counter: " << shared_mem[1] << " - Multiple of " << shared_mem[0] << std::endl;
+                }
+                else{
+                    std::cout << "Cycle number " << cycle_counter1++ << " Process 1 Counter: " << shared_mem[1] << std::endl;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(50)); // slow down output
+            }
+        exit(0); // never actually reached
+    } 
+    
+    else {
+        // Parent process
+        std::cout << "Parent process is running" << std::endl;
+
+      
+        pid2 = fork();
+
+        if (pid2 <0){
+            std::cerr << "Fork failed" << std::endl;
+            exit(1);
+        }
+
+        else if (pid2 == 0) {
+            // Child process
+            execl("./process2", "process2", nullptr); //when we call exec() it still has the same PID as before, so it is still a child process
+            exit(0); // never actually reached
+        } 
+
+        else{
+            int status;
+            // Parent process
+
+            //waitpid is a better version of wait() because it allows you to specify which child process to wait for. 
+            //we will pass in child pid, address of status variable to store exit status, and options (0 means no options)
+
+
+            //parent will wait for the pid2 (process2) to finish, when it does,
+            //status will be updated with the exit status of process2
+            //we are essentially pausing the parent process here until process2 finishes
+            //and it will then kill the PCB of it and everything. If it ends, we will 
+            //continue by terminating process1 as well.
+            waitpid(pid2, &status, 0);
+            kill(pid1, SIGTERM); //terminate child process 1
+            
+        }
+
+    }
+
+    return 0;
+
+}
